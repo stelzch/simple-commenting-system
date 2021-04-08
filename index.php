@@ -1,20 +1,15 @@
 <?php
-
-require 'config.php';
 // EXIT CODES: -2 for DB connection issue
 
-function fetchEmailsOrdered($db, $postid, $only_validated = 1) {
+include 'config.php';
+header("Access-Control-Allow-Origin: $cors_header");
+
+function fetchEmailsOrdered($db, $postid) {
     include 'config.php';
 
-    if ($only_validated) {
     $statement = $db->prepare('SELECT date,email_file FROM comments
         WHERE (post_id = :post_id) AND validated = 1
         ORDER BY date DESC');
-    } else {
-    $statement = $db->prepare('SELECT date,email_file FROM comments
-        WHERE (post_id = :post_id)
-        ORDER BY date DESC');
-    }
     $statement->execute(array(':post_id' => $postid));
 
     while ($entry = $statement->fetch(PDO::FETCH_ASSOC)) {
@@ -24,20 +19,23 @@ function fetchEmailsOrdered($db, $postid, $only_validated = 1) {
         $email = fread($file, $max_mail_size);
         fclose($file);
 
+        // Split the email into headers and body
         $arr = explode("\r\n\r\n", $email, 2);
 
         $headers = $arr[0];
         $body = preg_replace('/\r\n/', "<br>\n",htmlspecialchars($arr[1]));
 
+        // Try to determine the sender, otherwise use fallback value
         $match = '';
         $from = 'Anonymous';
-        if(preg_match('/^From: (.+) (<.+>)?$/', $headers)) {
-            $from = htmlspecialchars($match[0]);
+        if(preg_match('/\nFrom: ([^<\n]+)( )?(<.+>)?/', $headers, $match) || true) {
+            $from = htmlspecialchars($match[1]);
         }
 
         $date = DateTime::createFromFormat('U', $entry['date']);
+        $comment = array();
         
-        yield array('from' => $from, 'date' => $date, 'content' => $body);
+        yield array("from" => $from, "date" => $date, "content" => $body);
     }
 }
 
@@ -48,16 +46,15 @@ try {
 }
 
 
-//$id = $_GET['id'];
-$id = 'ApostID';
-
+$id = $_GET["id"];
 
 $entries_printed = false;
 
-foreach(fetchEmailsOrdered($db, $id, $show_by_default) as $comment) {
+$generator = fetchEmailsOrdered($db, $id);
+foreach($generator as $comment) {
     echo '<div class="comment">' . "\n";
     echo '  <span class="author">' . $comment['from'] . '</span>' . "\n";
-    echo '  <time>' . $comment['date']->format('d M y, G:i') . '</time>' . "\n";
+    echo '  <time>' . $comment['date']->format('d M y, H:i') . '</time>' . "\n";
     echo '  <span class="content">' . $comment['content'] . '</span>';
     echo '</div>' . "\n";
     $entries_printed = true;

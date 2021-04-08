@@ -29,12 +29,6 @@ $email_uid = "";
 $date = 0;
 $validated = 0;
 
-$insert_statement = $db->prepare('INSERT INTO comments (post_id,email_file, email_uid,date,validated) VALUES (:post_id, :email_file, :email_uid, :date, :validated)');
-$insert_statement->bindParam(':post_id', $post_id);
-$insert_statement->bindParam(':email_file', $email_file);
-$insert_statement->bindParam(':email_uid', $email_uid);
-$insert_statement->bindParam(':date', $date);
-$insert_statement->bindParam(':validated', $validated);
 
 foreach ($overview as $msg_info) {
     //if ($msg_info->seen) continue;
@@ -72,8 +66,12 @@ foreach ($overview as $msg_info) {
     fwrite($file, $body);
     fclose($file);
 
+    $insert_statement = $db->prepare('INSERT INTO comments (post_id,email_file,email_uid,date,validated) VALUES (:post_id, :email_file, :email_uid, :date, :validated)');
+
     try {
-        $insert_statement->execute();
+        $insert_statement->execute(array(':post_id' => $post_id,
+            ':email_file' => $email_file, ':email_uid' => $email_uid,
+            ':date' => $date, ':validated' => $validated));
     } catch (PDOException $e) {
         // Only report the error if it is not the one caused by trying
         // to add duplicate entries to the database
@@ -82,6 +80,7 @@ foreach ($overview as $msg_info) {
         }
     }
     array_push($fetched_messages, $msg_info->msgno); 
+    echo("[MSG] {$msg_info->subject}\n");
 }
 
 imap_setflag_full($imap, implode(',', $fetched_messages), '\\Seen');
